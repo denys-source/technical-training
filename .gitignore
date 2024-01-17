@@ -24,6 +24,7 @@ install/win32/*.bat
 install/win32/meta.py
 
 # various virtualenv
+venv/
 /bin/
 /build/
 /dist/
