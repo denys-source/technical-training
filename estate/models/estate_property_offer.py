@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from odoo import models, fields, api
+from odoo import models, fields, api, exceptions
 
 
 class EstatePropertyOffer(models.Model):
@@ -10,6 +10,7 @@ class EstatePropertyOffer(models.Model):
     price = fields.Float()
     status = fields.Selection(
         selection=[("accepted", "Accepted"), ("refused", "Refused")],
+        readonly=True,
         copy=False,
     )
     partner_id = fields.Many2one("res.partner", required=True)
@@ -31,3 +32,30 @@ class EstatePropertyOffer(models.Model):
             property.validity = (
                 property.date_deadline - property.create_date.date()
             ).days
+
+    def accept_offer(self):
+        if self.status != "accepted":
+            offers = self.search([])
+            for offer in offers:
+                offer.status = "refused"
+            self.status = "accepted"
+            self.property_id.state = "offer_received"
+            self.property_id.write(
+                {
+                    "buyer_id": self.partner_id,
+                    "selling_price": self.price,
+                }
+            )
+        return True
+
+    def refuse_offer(self):
+        if self.status == "accepted":
+            self.property_id.state = "new"
+            self.property_id.write(
+                {
+                    "buyer_id": False,
+                    "selling_price": 0,
+                }
+            )
+        self.status = "refused"
+        return True

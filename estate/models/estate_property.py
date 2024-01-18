@@ -47,7 +47,9 @@ class EstateProperty(models.Model):
             ("offer_received", "Offer Received"),
             ("sold", "Sold"),
             ("canceled", "Canceled"),
-        ]
+        ],
+        readonly=True,
+        default="new",
     )
 
     @api.depends("living_area", "garden_area")
@@ -58,7 +60,9 @@ class EstateProperty(models.Model):
     @api.depends("offer_ids")
     def _compute_best_price(self):
         for property in self:
-            property.best_price = max(property.offer_ids.mapped("price"))
+            property.best_price = max(
+                property.offer_ids.mapped("price"), default=0
+            )
 
     @api.onchange("garden")
     def _onchange_garden(self):
@@ -66,15 +70,21 @@ class EstateProperty(models.Model):
         self.garden_orientation = "north" if self.garden else None
 
     def set_sold_state(self):
-        for property in self:
-            if property.state == "canceled":
-                raise exceptions.UserError("Canceled property cannot be sold")
-            property.state = "sold"
+        if self.state == "sold":
+            raise exceptions.UserError("Property has been already sold")
+        if self.state == "canceled":
+            raise exceptions.UserError("Canceled property cannot be sold")
+        if self.state != "offer_received":
+            raise exceptions.UserError("Accept offer first")
+        self.state = "sold"
         return True
 
     def set_canceled_state(self):
-        for property in self:
-            if property.state == "sold":
-                raise exceptions.UserError("Sold property cannot be canceled")
-            property.state = "canceled"
+        if self.state == "sold":
+            raise exceptions.UserError("Sold property cannot be canceled")
+        self.state = "canceled"
+        for offer in self.offer_ids:
+            offer.status = "refused"
+        self.buyer_id = False
+        self.selling_price = 0
         return True
